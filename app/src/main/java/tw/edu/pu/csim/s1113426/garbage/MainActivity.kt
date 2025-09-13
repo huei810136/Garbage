@@ -42,12 +42,52 @@ val trashItems = setOf(
     "carrot", "hot dog", "pizza", "donut", "cake", "teddy bear"
 )
 
+// ====== 英文轉中文對照表 ======
+val itemTranslations = mapOf(
+    "bottle" to "瓶子",
+    "wine glass" to "酒杯",
+    "cup" to "杯子",
+    "bowl" to "碗",
+    "book" to "書",
+    "spoon" to "湯匙",
+    "fork" to "叉子",
+    "knife" to "刀子",
+    "laptop" to "筆記型電腦",
+    "mouse" to "滑鼠",
+    "keyboard" to "鍵盤",
+    "cell phone" to "手機",
+    "tv" to "電視",
+    "remote" to "遙控器",
+    "microwave" to "微波爐",
+    "oven" to "烤箱",
+    "toaster" to "烤麵包機",
+    "refrigerator" to "冰箱",
+    "scissors" to "剪刀",
+    "toothbrush" to "牙刷",
+    "banana" to "香蕉",
+    "apple" to "蘋果",
+    "sandwich" to "三明治",
+    "orange" to "橘子",
+    "broccoli" to "花椰菜",
+    "carrot" to "紅蘿蔔",
+    "hot dog" to "熱狗",
+    "pizza" to "披薩",
+    "donut" to "甜甜圈",
+    "cake" to "蛋糕",
+    "teddy bear" to "泰迪熊"
+)
+
 fun classifyItem(itemName: String): String {
     return when {
         recycleItems.contains(itemName) -> "回收"
         trashItems.contains(itemName) -> "一般垃圾"
         else -> "其他"
     }
+}
+
+// ====== 翻譯函數 ======
+fun translateToChineseItem(englishName: String): String {
+    return itemTranslations[englishName] ?: englishName
 }
 
 // ====== ImageProxy → Bitmap ======
@@ -150,8 +190,9 @@ class MainActivity : ComponentActivity() {
 
                                                                 // 只在信心度足夠高時更新結果
                                                                 if (score > 0.3f) {
-                                                                    detectedItem = label
-                                                                    category = classifyItem(label)
+                                                                    val chineseLabel = translateToChineseItem(label)  // 現在這個函數存在了
+                                                                    detectedItem = chineseLabel                      // 顯示中文名稱
+                                                                    category = classifyItem(label)                   // 使用英文名稱分類
                                                                     confidence = score
                                                                 }
                                                             }

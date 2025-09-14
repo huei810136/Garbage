@@ -28,6 +28,10 @@ import androidx.lifecycle.LifecycleOwner
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.task.vision.detector.ObjectDetector
 import org.tensorflow.lite.task.vision.detector.Detection
+import androidx.compose.foundation.Image
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 
 // ====== 垃圾分類表 ======
 val recycleItems = setOf(
@@ -152,155 +156,167 @@ class MainActivity : ComponentActivity() {
             Scaffold(
                 topBar = { CenterAlignedTopAppBar(title = { Text("垃圾分類 Demo") }) }
             ) { innerPadding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    // ===== CameraX Preview - 佔據剩餘空間 =====
-                    Box(
-                        modifier = Modifier.weight(1f)
+
+                Box{
+                    Image(
+                        painter = painterResource(id = R.drawable.garbage_bg),
+                        contentDescription = "背景圖片",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(0.8f), // 80% 不透明度，讓前景更清楚
+                        contentScale = ContentScale.Crop // 裁切填滿畫面
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
                     ) {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = { ctx ->
-                                PreviewView(ctx).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
+                        // ===== CameraX Preview - 佔據剩餘空間 =====
+                        Box(
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            AndroidView(
+                                modifier = Modifier.fillMaxSize(),
+                                factory = { ctx ->
+                                    PreviewView(ctx).apply {
+                                        layoutParams = ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
 
-                                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                                    cameraProviderFuture.addListener({
-                                        val cameraProvider = cameraProviderFuture.get()
+                                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                                        cameraProviderFuture.addListener({
+                                            val cameraProvider = cameraProviderFuture.get()
 
-                                        val preview = Preview.Builder().build().also {
-                                            it.setSurfaceProvider(surfaceProvider)
-                                        }
+                                            val preview = Preview.Builder().build().also {
+                                                it.setSurfaceProvider(surfaceProvider)
+                                            }
 
-                                        val imageAnalyzer = ImageAnalysis.Builder()
-                                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                            .build()
-                                            .also { analyzer ->
-                                                analyzer.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
-                                                    try {
-                                                        objectDetector?.let { detector ->
-                                                            val bitmap = imageProxy.toBitmap(ctx)
-                                                            val tensorImage = TensorImage.fromBitmap(bitmap)
-                                                            val results: List<Detection> = detector.detect(tensorImage)
+                                            val imageAnalyzer = ImageAnalysis.Builder()
+                                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                                .build()
+                                                .also { analyzer ->
+                                                    analyzer.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                                                        try {
+                                                            objectDetector?.let { detector ->
+                                                                val bitmap = imageProxy.toBitmap(ctx)
+                                                                val tensorImage = TensorImage.fromBitmap(bitmap)
+                                                                val results: List<Detection> = detector.detect(tensorImage)
 
-                                                            if (results.isNotEmpty()) {
-                                                                val detection = results[0]
-                                                                if (detection.categories.isNotEmpty()) {
-                                                                    val category_info = detection.categories[0]
-                                                                    val label = category_info.label
-                                                                    val score = category_info.score
+                                                                if (results.isNotEmpty()) {
+                                                                    val detection = results[0]
+                                                                    if (detection.categories.isNotEmpty()) {
+                                                                        val category_info = detection.categories[0]
+                                                                        val label = category_info.label
+                                                                        val score = category_info.score
 
-                                                                    // 只在信心度足夠高時更新結果
-                                                                    if (score > 0.3f) {
-                                                                        val chineseLabel = translateToChineseItem(label)
-                                                                        detectedItem = chineseLabel
-                                                                        category = classifyItem(label)
-                                                                        confidence = score
+                                                                        // 只在信心度足夠高時更新結果
+                                                                        if (score > 0.3f) {
+                                                                            val chineseLabel = translateToChineseItem(label)
+                                                                            detectedItem = chineseLabel
+                                                                            category = classifyItem(label)
+                                                                            confidence = score
+                                                                        }
                                                                     }
                                                                 }
                                                             }
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                            detectedItem = "辨識錯誤"
+                                                            category = "錯誤"
+                                                        } finally {
+                                                            imageProxy.close()
                                                         }
-                                                    } catch (e: Exception) {
-                                                        e.printStackTrace()
-                                                        detectedItem = "辨識錯誤"
-                                                        category = "錯誤"
-                                                    } finally {
-                                                        imageProxy.close()
                                                     }
                                                 }
+
+                                            try {
+                                                cameraProvider.unbindAll()
+                                                cameraProvider.bindToLifecycle(
+                                                    ctx as LifecycleOwner,
+                                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                                    preview,
+                                                    imageAnalyzer
+                                                )
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
                                             }
-
-                                        try {
-                                            cameraProvider.unbindAll()
-                                            cameraProvider.bindToLifecycle(
-                                                ctx as LifecycleOwner,
-                                                CameraSelector.DEFAULT_BACK_CAMERA,
-                                                preview,
-                                                imageAnalyzer
-                                            )
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                    }, ContextCompat.getMainExecutor(ctx))
+                                        }, ContextCompat.getMainExecutor(ctx))
+                                    }
                                 }
-                            }
-                        )
-                    }
+                            )
+                        }
 
-                    // ===== 底部結果顯示區塊 =====
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // 狀態指示
-                        Text(
-                            text = if (objectDetector != null) "模型已載入" else "模型載入失敗",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (objectDetector != null)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-
-                        // ===== Card 顯示結果 =====
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        // ===== 底部結果顯示區塊 =====
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                            // 狀態指示
+                            Text(
+                                text = if (objectDetector != null) "模型已載入" else "模型載入失敗",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (objectDetector != null)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+
+                            // ===== Card 顯示結果 =====
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                             ) {
-                                Text(
-                                    "辨識到的物品",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    detectedItem,
-                                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-
-                                if (confidence > 0) {
+                                Column(
+                                    modifier = Modifier.padding(20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
                                     Text(
-                                        "信心度: ${String.format("%.1f%%", confidence * 100)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(bottom = 12.dp)
+                                        "辨識到的物品",
+                                        style = MaterialTheme.typography.titleMedium
                                     )
-                                } else {
-                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text(
+                                        detectedItem,
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 24.sp),
+                                        modifier = Modifier.padding(vertical = 4.dp)
+                                    )
+
+                                    if (confidence > 0) {
+                                        Text(
+                                            "信心度: ${String.format("%.1f%%", confidence * 100)}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(bottom = 12.dp)
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                    }
+
+                                    Divider(
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                    )
+
+                                    Text(
+                                        "分類結果",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Text(
+                                        category,
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
+                                        color = when {
+                                            category.contains("回收") -> MaterialTheme.colorScheme.primary
+                                            category.contains("一般垃圾") -> MaterialTheme.colorScheme.error
+                                            category.contains("廚餘") -> MaterialTheme.colorScheme.secondary
+                                            else -> MaterialTheme.colorScheme.tertiary
+                                        },
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
                                 }
-
-                                Divider(
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                )
-
-                                Text(
-                                    "分類結果",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Text(
-                                    category,
-                                    style = MaterialTheme.typography.headlineSmall.copy(fontSize = 28.sp),
-                                    color = when {
-                                        category.contains("回收") -> MaterialTheme.colorScheme.primary
-                                        category.contains("一般垃圾") -> MaterialTheme.colorScheme.error
-                                        category.contains("廚餘") -> MaterialTheme.colorScheme.secondary
-                                        else -> MaterialTheme.colorScheme.tertiary
-                                    },
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
                             }
                         }
                     }
